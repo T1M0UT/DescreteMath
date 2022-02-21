@@ -5,6 +5,7 @@ Descrete Math Lab 1
 18.02.2022
 """
 from numpy import inf
+import dataset_reader
 
 
 class Node:
@@ -20,44 +21,28 @@ class Node:
         self.outcome = None
 
     @staticmethod
-    def my_kostil_get_split(dataset):
-        # TODO: Get rid of extra lines - refactor
+    def init_split(dataset):
         class_values = list(set(row[-1] for row in dataset))
-        b_index, b_value, b_score, b_groups = inf, inf, inf, None
+        best_index, best_threshold, best_gini, best_groups = inf, inf, inf, None
+        if len(dataset) < 1:
+            return
         for index in range(len(dataset[0]) - 1):
             for row in dataset:
                 groups = test_split(index, row[index], dataset)
                 gini = MyDecisionTreeClassifier.gini(groups, class_values)
-                if gini < b_score:
-                    b_score = gini
-                    _, b_value, _ = index, row[index], groups
-        threshold = b_value
-        best_gini = b_score
-        return best_gini, float(threshold)
+                if gini < best_gini:
+                    best_gini = gini
+                    best_index, best_threshold, best_groups = index, row[index], groups
+        return best_gini, best_index, float(best_threshold), best_groups
 
     # Select the best split point for a dataset
     def get_split(self):
-        class_values = list(set(row[-1] for row in self.dataset))
-        best_index, b_value, best_gini, b_groups = inf, inf, inf, None
-        if len(self.dataset) < 1:
-            return
-        for index in range(len(self.dataset[0]) - 1):
-            for row in self.dataset:
-                groups = test_split(index, row[index], self.dataset)
-                gini = MyDecisionTreeClassifier.gini(groups, class_values)
-                if gini < best_gini:
-                    best_gini = gini
-                    best_index, b_value, b_groups = index, row[index], groups
-        if best_gini == 0.0:
-            self.to_terminal()
-            return
+        best_gini, best_index, best_threshold, best_groups = Node.init_split(self.dataset)
         self.feature_index = best_index
-        self.left = Node(b_groups[0], self.target, best_gini)
-        # self.left.feature_index = b_index
-        self.left.threshold = b_value
-        self.right = Node(b_groups[1], self.target, best_gini)
-        # self.right.feature_index = b_index
-        self.right.threshold = b_value
+        self.left = Node(best_groups[0], self.target, best_gini)
+        self.left.threshold = best_threshold
+        self.right = Node(best_groups[1], self.target, best_gini)
+        self.right.threshold = best_threshold
 
     # Create a terminal node value
     def to_terminal(self, group=None):
@@ -68,26 +53,18 @@ class Node:
             outcomes = [row[-1] for row in self.dataset]
 
         if not outcomes:
-            self.outcome = 999
             return
         self.outcome = max(set(outcomes), key=outcomes.count)
 
-    # Create child splits for a node or make terminal
     def split(self, max_depth, min_size, depth):
         """
 
         """
-        # if self.gini == 0.0:
-        #     self.to_terminal()
-        #     return
-        # if round(self.left.gini, 1) <= 0.0:
-        #     self.left.to_terminal()
-        #     return
-        # if round(self.right.gini, 1) <= 0.0:
-        #     self.right.to_terminal()
-        #     return
         if self.gini == 0.0:
             self.to_terminal()
+            self.left = None
+            self.right = None
+            return
 
         if not self.left or not self.right:
             return
@@ -132,34 +109,24 @@ class MyDecisionTreeClassifier:
         classes in each group result in a Gini score of 0.5
         (for a 2 class problem).
         """
-        # count all samples at split point
         n_instances = float(sum([len(group) for group in groups]))
-        # sum weighted Gini index for each group
         gini = 0.0
         for group in groups:
             size = float(len(group))
-            # avoid divide by zero
             if size == 0:
                 continue
             score = 0.0
-            # score the group based on the score for each class
             for class_val in classes:
                 p = [row[-1] for row in group].count(class_val) / size
                 score += p * p
-            # weight the group score by its relative size
             gini += (1.0 - score) * (size / n_instances)
         return gini
 
-    def split_data(self, X, y) -> tuple[int, int]:
-        # test all the possible splits in O(N^2)
-        # return index and threshold value
-        pass
-
     def build_tree(self, dataset, target):
-        # create a root node
+        """
 
-        # recursively split until max depth is not exeeced
-        gini, threshold = Node.my_kostil_get_split(dataset)
+        """
+        gini, _, threshold, _ = Node.init_split(dataset)
         self.root = Node(dataset, target, gini)
         self.root.threshold = threshold
         self.root.get_split()
@@ -170,9 +137,8 @@ class MyDecisionTreeClassifier:
         pass
 
     def predict(self, X_test):
-        # traverse the tree while there is left node
-        # and return the predicted class for it,
-        # note that X_test can be not only one example
+        """
+        """
         pass
 
     # Print a decision tree
@@ -182,12 +148,12 @@ class MyDecisionTreeClassifier:
     def print_tree(self, node: Node, depth=0):
         if not node:
             return
-        # if node.outcome:
-        #     print('%s[Terminal Node %s]' % (depth * '  ', node.outcome))
-        # elif node:
-        print(f"{depth * '  '}[Feature {node.feature_index + 1} < {node.gini:.3f}]")
-        self.print_tree(node.left, depth + 1)
-        self.print_tree(node.right, depth + 1)
+        if node.outcome is not None:
+            print('%s[Terminal Node %s]' % (depth * '  ', node.outcome))
+        else:
+            print(f"{depth * '  '}[Feature {node.feature_index + 1} < {node.gini:.3f}]")
+            self.print_tree(node.left, depth + 1)
+            self.print_tree(node.right, depth + 1)
 
 
 # Split a dataset based on an attribute and an attribute value
@@ -201,25 +167,9 @@ def test_split(index, value, dataset):
     return left, right
 
 
-
-
-
-# dataset = [[2.771244718, 1.784783929, 0],
-#            [1.728571309, 1.169761413, 0],
-#            [3.678319846, 2.81281357, 0],
-#            [3.961043357, 2.61995032, 0],
-#            [2.999208922, 2.209014212, 0],
-#            [7.497545867, 3.162953546, 1],
-#            [9.00220326, 3.339047188, 1],
-#            [7.444542326, 0.476683375, 1],
-#            [10.12493903, 3.234550982, 1],
-#            [6.642287351, 3.319983761, 1]]
-# tree = build_tree(dataset, 10)
-# print_tree(tree)
-
-tree = MyDecisionTreeClassifier(10, 1)
-my_ds, my_tg = [[[1, 1], [1, 0]], [[1, 1], [1, 0]]], [0, 1]
-import dataset_reader
-ds = dataset_reader.reading_file("iris.csv")
-tree.build_tree(ds, [0, 1, 2])
-tree.print()
+if __name__ == "__main__":
+    tree = MyDecisionTreeClassifier(10, 1)
+    my_ds, my_tg = [[[1, 1], [1, 0]], [[1, 1], [1, 0]]], [0, 1]
+    ds = dataset_reader.reading_file("iris.csv")
+    tree.build_tree(ds, [0, 1, 2])
+    tree.print()
