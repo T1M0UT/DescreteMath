@@ -21,32 +21,53 @@ class Node:
         self.outcome = None
 
     @staticmethod
-    def init_split(dataset):
+    def __test_split(index, value, dataset):
+        """
+        Checks whether the element is lower than the given value:
+        If yes - adds to the left node list
+        If no - to the right node list
+        """
+        left, right = list(), list()
+        for row in dataset:
+            if row[index] < value:
+                left.append(row)
+            else:
+                right.append(row)
+        return left, right
+
+    @staticmethod
+    def find_lowest_gini(dataset):
+        """
+        Try all ranges and find the best index for splitting (with lowest gini index)
+        """
         class_values = list(set(row[-1] for row in dataset))
         best_index, best_threshold, best_gini, best_groups = inf, inf, inf, None
         if len(dataset) < 1:
             return
         for index in range(len(dataset[0]) - 1):
             for row in dataset:
-                groups = test_split(index, row[index], dataset)
+                groups = Node.__test_split(index, row[index], dataset)
                 gini = MyDecisionTreeClassifier.gini(groups, class_values)
                 if gini < best_gini:
                     best_gini = gini
                     best_index, best_threshold, best_groups = index, row[index], groups
         return best_gini, best_index, float(best_threshold), best_groups
 
-    # Select the best split point for a dataset
-    def get_split(self):
-        best_gini, best_index, best_threshold, best_groups = Node.init_split(self.dataset)
+    def split_into_children_nodes(self):
+        """
+        Create left and right node with new values
+        """
+        best_gini, best_index, best_threshold, best_groups = Node.find_lowest_gini(self.dataset)
         self.feature_index = best_index
         self.left = Node(best_groups[0], self.target, best_gini)
         self.left.threshold = best_threshold
         self.right = Node(best_groups[1], self.target, best_gini)
         self.right.threshold = best_threshold
 
-    # Create a terminal node value
-    def to_terminal(self, group=None):
-        # TODO: now this probably doesn't work: check and rewrite
+    def __to_terminal(self, group=None):
+        """
+        Makes a leaf out of given node
+        """
         if group:
             outcomes = [row[-1] for row in group]
         else:
@@ -58,10 +79,14 @@ class Node:
 
     def split(self, max_depth, min_size, depth):
         """
-
+        Recursive split that has 2 options:
+        1. A node becomes terminal (a leaf)
+        2. Go 1 level deeper recursion
+        A node becomes terminal, when max recursion depth / minimum dataset size is reached /
+        gini == 0.0 / dataset is completely processed
         """
         if self.gini == 0.0:
-            self.to_terminal()
+            self.__to_terminal()
             self.left = None
             self.right = None
             return
@@ -70,24 +95,24 @@ class Node:
             return
 
         if not self.left.dataset or not self.right.dataset:
-            self.left.to_terminal(self.left.dataset + self.right.dataset)
-            self.right.to_terminal(self.left.dataset + self.right.dataset)
+            self.left.__to_terminal(self.left.dataset + self.right.dataset)
+            self.right.__to_terminal(self.left.dataset + self.right.dataset)
             return
 
         if depth >= max_depth:
-            self.left.to_terminal(), self.right.to_terminal()
+            self.left.__to_terminal(), self.right.__to_terminal()
             return
 
         if len(self.left.dataset) <= min_size:
-            self.left.to_terminal()
+            self.left.__to_terminal()
         else:
-            self.left.get_split()
+            self.left.split_into_children_nodes()
             self.left.split(max_depth, min_size, depth + 1)
 
         if len(self.right.dataset) <= min_size:
-            self.right.to_terminal()
+            self.right.__to_terminal()
         else:
-            self.right.get_split()
+            self.right.split_into_children_nodes()
             self.right.split(max_depth, min_size, depth + 1)
 
 
@@ -122,19 +147,15 @@ class MyDecisionTreeClassifier:
             gini += (1.0 - score) * (size / n_instances)
         return gini
 
-    def build_tree(self, dataset, target):
+    def build(self, dataset, target):
         """
-
+        Builds a decision classification tree from the root node
         """
-        gini, _, threshold, _ = Node.init_split(dataset)
+        gini, _, threshold, _ = Node.find_lowest_gini(dataset)
         self.root = Node(dataset, target, gini)
         self.root.threshold = threshold
-        self.root.get_split()
+        self.root.split_into_children_nodes()
         self.root.split(self.max_depth, self.min_size, 1)
-
-    def fit(self, X, y):
-        # basically wrapper for build tree
-        pass
 
     def predict(self, X_test):
         """
@@ -143,33 +164,25 @@ class MyDecisionTreeClassifier:
 
     # Print a decision tree
     def print(self):
-        self.print_tree(self.root)
+        """
+        Displays the tree to standard output stream
+        """
+        self.__recursive_print(self.root)
 
-    def print_tree(self, node: Node, depth=0):
+    def __recursive_print(self, node: Node, depth=0):
         if not node:
             return
         if node.outcome is not None:
             print('%s[Terminal Node %s]' % (depth * '  ', node.outcome))
         else:
             print(f"{depth * '  '}[Feature {node.feature_index + 1} < {node.gini:.3f}]")
-            self.print_tree(node.left, depth + 1)
-            self.print_tree(node.right, depth + 1)
-
-
-# Split a dataset based on an attribute and an attribute value
-def test_split(index, value, dataset):
-    left, right = list(), list()
-    for row in dataset:
-        if row[index] < value:
-            left.append(row)
-        else:
-            right.append(row)
-    return left, right
+            self.__recursive_print(node.left, depth + 1)
+            self.__recursive_print(node.right, depth + 1)
 
 
 if __name__ == "__main__":
     tree = MyDecisionTreeClassifier(10, 1)
     my_ds, my_tg = [[[1, 1], [1, 0]], [[1, 1], [1, 0]]], [0, 1]
     ds = dataset_reader.reading_file("iris.csv")
-    tree.build_tree(ds, [0, 1, 2])
+    tree.build(ds, [0, 1, 2])
     tree.print()
