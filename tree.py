@@ -5,7 +5,8 @@ Descrete Math Lab 1
 18.02.2022
 """
 from numpy import inf
-import dataset_reader
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
 
 
 class Node:
@@ -29,7 +30,7 @@ class Node:
         """
         left, right = list(), list()
         for row in dataset:
-            if row[index] < value:
+            if row[index] <= value:
                 left.append(row)
             else:
                 right.append(row)
@@ -69,10 +70,11 @@ class Node:
         Makes a leaf out of given node
         """
         if group:
-            outcomes = [row[-1] for row in group]
+            group_classes = [list(group[i]) + [self.target[i]] for i in range(len(group))]
+            outcomes = [row[-1] for row in group_classes]
         else:
-            outcomes = [row[-1] for row in self.dataset]
-
+            group_classes = [list(self.dataset[i]) + [self.target[i]] for i in range(len(self.dataset))]
+            outcomes = [row[-1] for row in group_classes]
         if not outcomes:
             return
         self.outcome = max(set(outcomes), key=outcomes.count)
@@ -114,6 +116,21 @@ class Node:
         else:
             self.right.split_into_children_nodes()
             self.right.split(max_depth, min_size, depth + 1)
+
+
+class PredictionError(Exception):
+    """
+    Exception raised for errors prediction of decision tree classifier.
+
+    Attributes:
+        node -- input node which caused the error
+        message -- explanation of the error
+    """
+
+    def __init__(self, node, message="No left/right node were found. Return too early"):
+        self.node = node
+        self.message = message
+        super().__init__(self.message)
 
 
 class MyDecisionTreeClassifier:
@@ -159,10 +176,23 @@ class MyDecisionTreeClassifier:
 
     def predict(self, X_test):
         """
+        Predict data in the testing dataset
         """
-        pass
+        return [self.__predict(self.root, x) for x in X_test]
 
-    # Print a decision tree
+    def __predict(self, node, X):
+        if X[node.feature_index] <= node.threshold:
+            if node.left:
+                if node.left.outcome is not None:
+                    return node.left.outcome
+                return self.__predict(node.left, X)
+
+        if node.right:
+            if node.right.outcome is not None:
+                return node.right.outcome
+            return self.__predict(node.right, X)
+        raise PredictionError(node)
+
     def print(self):
         """
         Displays the tree to standard output stream
@@ -182,7 +212,15 @@ class MyDecisionTreeClassifier:
 
 if __name__ == "__main__":
     tree = MyDecisionTreeClassifier(10, 1)
-    my_ds, my_tg = [[[1, 1], [1, 0]], [[1, 1], [1, 0]]], [0, 1]
-    ds = dataset_reader.reading_file("iris.csv")
-    tree.build(ds, [0, 1, 2])
+    # my_ds, my_tg = [[[1, 1], [1, 0]], [[1, 1], [1, 0]]], [0, 1]
+    # ds = dataset_reader.reading_file("iris.csv")
+    # tree.build(ds, [0, 1, 2])
+    # tree.print()
+    iris = load_iris()
+    dataset, target = iris["data"], iris["target"]
+    x, x_test, y, y_test = train_test_split(dataset, target)
+    tree.build(x, y)
     tree.print()
+    print(tree.predict(x_test))
+
+
